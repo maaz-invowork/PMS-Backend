@@ -1,10 +1,9 @@
 import enum
 from sqlalchemy import Column, Integer, ForeignKey, String, Text, Table
-from .database import Base
 from datetime import datetime, timezone
 from typing import List, Optional
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from .database import Base
+from database import Base
 
 # Association tables for many-to-many relationships
 project_members = Table(

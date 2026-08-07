@@ -1,0 +1,3 @@
+docker run --name pms-postgres -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=admin123 -e POSTGRES_DB=pms_db -p 5432:5432 -d postgres:16-alpine
+
+uv run python -m uvicorn main:app --reload --app-dir src/project_management_system
