@@ -10,8 +10,10 @@ from sqlalchemy.orm import Session
 from dotenv import load_dotenv
 from database import SessionLocal
 from deps import db_dependency
-from models import User
+from models import User, Role
 import schemas
+from sqlalchemy import select
+
 
 load_dotenv()
 SECRET_KEY = os.getenv("SECRET_KEY")
@@ -31,7 +33,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     )
 
 def authenticate_user(username: str, password: str, db: Session):
-    user = db.query(Users).filter(Users.username == username).first()
+    user = db.query(User).filter(User.username == username).first()
     if not user:
         return False
     if not verify_password(password, user.hashed_password):
@@ -47,17 +49,40 @@ def create_access_token(username: str, user_id: int, expires_delta: timedelta):
 
 @router.post("/", status_code=status.HTTP_201_CREATED, response_model=schemas.UserResponse)
 async def create_user(
-    user_request: schemas.UserCreate, db: db_dependency
+    create_user_request: schemas.UserCreate, db: db_dependency
 ):
-    created_user = Users(
-        username=user_request.username,
-        email=user_request.email,
-        full_name=user_request.full_name,
-        hashed_password=hash_password(user_request.password)
+
+    existing_user_stmt = select(User).where(
+        (User.username == create_user_request.username) | 
+        (User.email == create_user_request.email)
     )
+    if db.scalar(existing_user_stmt):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username or email is already registered.",
+        )
+
+    role_stmt = select(Role).where(Role.name == "member")
+    default_role = db.scalar(role_stmt)
+
+    if not default_role:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Default 'member' role not found in database.",
+        )
+
+    created_user = User(
+        username=create_user_request.username,
+        email=create_user_request.email,
+        full_name=create_user_request.full_name,
+        hashed_password=hash_password(create_user_request.password),
+        role_id=default_role.id
+    )
+
     db.add(created_user)
     db.commit()
     db.refresh(created_user)
+
     return created_user
 
 @router.post("/token", response_model=schemas.Token)
@@ -74,3 +99,4 @@ async def login_for_access_token(
         )
     token = create_access_token(user.username, user.id, timedelta(minutes=20))
     return {"access_token": token, "token_type": "bearer"}
+
