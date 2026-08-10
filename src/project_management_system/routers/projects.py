@@ -1,0 +1,262 @@
+from typing import List
+from fastapi import APIRouter, HTTPException, status, Depends
+from sqlalchemy import select, or_
+from sqlalchemy.orm import selectinload
+from deps import require_permission
+
+from deps import db_dependency, user_dependency
+from models import Project, User
+import schemas
+
+router = APIRouter(prefix="/projects", tags=["Projects"])
+
+@router.post("/", status_code=status.HTTP_201_CREATED, response_model=schemas.ProjectResponse)
+async def create_project(
+    project_data: schemas.ProjectCreate,
+    db: db_dependency,
+    current_user: User = Depends(require_permission("project:create")),
+):
+    new_project = Project(
+        title=project_data.title,
+        description=project_data.description,
+        owner_id=current_user.id,
+    )
+
+    db.add(new_project)
+    db.commit()
+
+    # Re-query with eager loading to populate relationship models for ProjectResponse
+    stmt = (
+        select(Project)
+        .options(
+            selectinload(Project.owner),
+            selectinload(Project.members),
+            selectinload(Project.boards),
+        )
+        .where(Project.id == new_project.id)
+    )
+    return db.scalar(stmt)
+
+@router.get("/", response_model=List[schemas.ProjectResponse])
+async def list_user_projects(
+    db: db_dependency,
+    current_user: User = Depends(require_permission("project:read"))
+):
+    stmt = (
+        select(Project)
+        .options(
+            selectinload(Project.owner),
+            selectinload(Project.members),
+            selectinload(Project.boards),
+        )
+    )
+
+    if current_user.role.name != "admin":
+        stmt = stmt.where(
+            or_(
+                Project.owner_id == current_user.id,
+                Project.members.any(User.id == current_user.id),
+            )
+        )
+
+    return db.scalars(stmt.distinct()).all()
+
+@router.get("/{project_id}", response_model=schemas.ProjectResponse)
+async def get_project(
+    project_id: int,
+    db: db_dependency,
+    current_user: User = Depends(require_permission("project:read"))
+):
+    stmt = (
+        select(Project)
+        .options(
+            selectinload(Project.owner),
+            selectinload(Project.members),
+            selectinload(Project.boards),
+        )
+        .where(Project.id == project_id)
+    )
+    project = db.scalar(stmt)
+
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found.",
+        )
+
+    is_admin = current_user.role.name == "admin"
+
+    is_member_or_owner = (
+        project.owner_id == current_user.id or 
+        any(m.id == current_user.id for m in project.members)
+    )
+
+    if not (is_admin or is_member_or_owner):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have access to this project.",
+        )
+
+    return project
+
+@router.patch("/{project_id}", response_model=schemas.ProjectResponse)
+async def update_project(
+    project_id: int,
+    project_update: schemas.ProjectUpdate,
+    db: db_dependency,
+    current_user: User = Depends(require_permission("project:update")),
+):
+    stmt = (
+        select(Project)
+        .options(
+            selectinload(Project.owner),
+            selectinload(Project.members),
+            selectinload(Project.boards),
+        )
+        .where(Project.id == project_id)
+    )
+    project = db.scalar(stmt)
+
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found.",
+        )
+
+    is_admin = current_user.role.name == "admin"
+
+    if not is_admin and project.owner_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admin and project owner can update project details.",
+        )
+
+    update_data = project_update.model_dump(exclude_unset=True)
+
+    for field, value in update_data.items():
+        setattr(project, field, value)
+
+    db.commit()
+    db.refresh(project)
+    return project
+
+@router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_project(
+    project_id: int,
+    db: db_dependency,
+    current_user: User = Depends(require_permission("project:delete")),
+):
+    stmt = select(Project).where(Project.id == project_id)
+    project = db.scalar(stmt)
+
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found.",
+        )
+
+    is_admin = current_user.role.name == "admin"
+
+    if not is_admin and project.owner_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admin and project owner can delete project.",
+        )
+
+    db.delete(project)
+    db.commit()
+    return None
+
+@router.post("/{project_id}/members", response_model=schemas.ProjectResponse)
+async def add_project_member(
+    project_id: int,
+    member_data: schemas.ProjectMemberUpdate,
+    db: db_dependency,
+    current_user: User = Depends(require_permission("members:manage")),
+):
+    stmt = (
+        select(Project)
+        .options(
+            selectinload(Project.owner),
+            selectinload(Project.members),
+            selectinload(Project.boards),
+        )
+        .where(Project.id == project_id)
+    )
+    project = db.scalar(stmt)
+
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Project not found."
+        )
+
+    is_admin = current_user.role.name == "admin"
+
+    if not is_admin and project.owner_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admin / project owners can add members.",
+        )
+
+    # Fetch user to add
+    user_stmt = select(User).where(User.id == member_data.user_id)
+    user_to_add = db.scalar(user_stmt)
+
+    if not user_to_add:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User to add was not found."
+        )
+
+    if any(m.id == user_to_add.id for m in project.members):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User is already a member of this project.",
+        )
+
+    project.members.append(user_to_add)
+    db.commit()
+    db.refresh(project)
+    return project
+
+@router.delete("/{project_id}/members/{user_id}", response_model=schemas.ProjectResponse)
+async def remove_project_member(
+    project_id: int,
+    user_id: int,
+    db: db_dependency,
+    current_user: User = Depends(require_permission("members:manage"))
+):
+    stmt = (
+        select(Project)
+        .options(
+            selectinload(Project.owner),
+            selectinload(Project.members),
+            selectinload(Project.boards),
+        )
+        .where(Project.id == project_id)
+    )
+    project = db.scalar(stmt)
+
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Project not found."
+        )
+
+    is_admin = current_user.role.name == "admin"
+
+    if not is_admin and project.owner_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admin / project owners can remove members.",
+        )
+
+    member_to_remove = next((m for m in project.members if m.id == user_id), None)
+    if not member_to_remove:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User is not a member of this project.",
+        )
+
+    project.members.remove(member_to_remove)
+    db.commit()
+    db.refresh(project)
+    return project

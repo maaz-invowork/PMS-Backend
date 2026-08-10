@@ -15,6 +15,8 @@ ALGORITHM = os.getenv("ALGORITHM")
 
 oauth2_bearer = OAuth2PasswordBearer(tokenUrl="auth/token")
 
+db_dependency = Annotated[Session, Depends(get_db)]
+
 async def get_current_user(
     token: Annotated[str, Depends(oauth2_bearer)],
     db: db_dependency,
@@ -44,6 +46,8 @@ async def get_current_user(
 
     return user
 
+user_dependency = Annotated[User, Depends(get_current_user)]
+
 
 def require_permission(permission_name: str) -> Callable:
     def permission_checker(
@@ -57,8 +61,3 @@ def require_permission(permission_name: str) -> Callable:
         return current_user
 
     return permission_checker
-
-
-
-db_dependency = Annotated[Session, Depends(get_db)]
-user_dependency = Annotated[User, Depends(get_current_user)]

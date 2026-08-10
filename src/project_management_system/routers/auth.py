@@ -1,19 +1,16 @@
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Annotated
 import bcrypt
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
-from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from dotenv import load_dotenv
-from database import SessionLocal
-from deps import db_dependency
-from models import User, Role
-import schemas
 from sqlalchemy import select
-
+from dotenv import load_dotenv
+import schemas
+from deps import db_dependency, user_dependency
+from models import User, Role
 
 load_dotenv()
 SECRET_KEY = os.getenv("SECRET_KEY")
@@ -42,12 +39,12 @@ def authenticate_user(username: str, password: str, db: Session):
 
 def create_access_token(username: str, user_id: int, expires_delta: timedelta):
     encode = {"sub": username, "id": user_id}
-    expire = datetime.utcnow() + expires_delta
+    expire = datetime.now(timezone.utc) + expires_delta
     encode.update({"exp": expire})
     encoded_jwt = jwt.encode(encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-@router.post("/", status_code=status.HTTP_201_CREATED, response_model=schemas.UserResponse)
+@router.post("/register", status_code=status.HTTP_201_CREATED, response_model=schemas.UserResponse)
 async def create_user(
     create_user_request: schemas.UserCreate, db: db_dependency
 ):
@@ -91,7 +88,7 @@ async def login_for_access_token(
     db: db_dependency
 ):
     user = authenticate_user(form_data.username, form_data.password, db)
-    if not user:
+    if not user:    
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Couldn't validate user.",
@@ -100,3 +97,6 @@ async def login_for_access_token(
     token = create_access_token(user.username, user.id, timedelta(minutes=20))
     return {"access_token": token, "token_type": "bearer"}
 
+@router.get("/user", status_code=status.HTTP_200_OK, response_model=schemas.UserResponse)
+async def get_user_profile(current_user: user_dependency):
+    return current_user
