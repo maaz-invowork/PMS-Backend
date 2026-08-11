@@ -167,19 +167,17 @@ async def delete_project(
     db.commit()
     return None
 
-@router.post("/{project_id}/members", response_model=schemas.ProjectResponse)
-async def add_project_member(
+@router.post("/{project_id}/members", response_model=List[schemas.UserMinimalResponse])
+async def add_project_members(
     project_id: int,
-    member_data: schemas.ProjectMemberUpdate,
+    member_data: schemas.ProjectMembersUpdate,
     db: db_dependency,
     current_user: User = Depends(require_permission("members:manage")),
 ):
     stmt = (
         select(Project)
         .options(
-            selectinload(Project.owner),
             selectinload(Project.members),
-            selectinload(Project.boards),
         )
         .where(Project.id == project_id)
     )
@@ -191,46 +189,34 @@ async def add_project_member(
         )
 
     is_admin = current_user.role.name == "admin"
-
     if not is_admin and project.owner_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only admin / project owners can add members.",
         )
 
-    # Fetch user to add
-    user_stmt = select(User).where(User.id == member_data.user_id)
-    user_to_add = db.scalar(user_stmt)
+    existing_ids = {m.id for m in project.members}
+    new_users = [u for u in requested_users if u.id not in existing_ids]
 
-    if not user_to_add:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="User to add was not found."
-        )
+    for user in new_users:
+        project.members.append(user)
 
-    if any(m.id == user_to_add.id for m in project.members):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="User is already a member of this project.",
-        )
-
-    project.members.append(user_to_add)
     db.commit()
-    db.refresh(project)
-    return project
+    db.refresh(project, ["members"])
+    
+    return project.members
 
-@router.delete("/{project_id}/members/{user_id}", response_model=schemas.ProjectResponse)
-async def remove_project_member(
+@router.post("/{project_id}/members/remove", response_model=List[schemas.UserMinimalResponse])
+async def remove_project_members(
     project_id: int,
-    user_id: int,
+    member_data: schemas.ProjectMembersUpdate,
     db: db_dependency,
-    current_user: User = Depends(require_permission("members:manage"))
+    current_user: User = Depends(require_permission("members:manage")),
 ):
     stmt = (
         select(Project)
         .options(
-            selectinload(Project.owner),
             selectinload(Project.members),
-            selectinload(Project.boards),
         )
         .where(Project.id == project_id)
     )
@@ -242,21 +228,16 @@ async def remove_project_member(
         )
 
     is_admin = current_user.role.name == "admin"
-
     if not is_admin and project.owner_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only admin / project owners can remove members.",
         )
 
-    member_to_remove = next((m for m in project.members if m.id == user_id), None)
-    if not member_to_remove:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User is not a member of this project.",
-        )
+    remove_ids = set(member_data.user_ids)
+    project.members = [m for m in project.members if m.id not in remove_ids]
 
-    project.members.remove(member_to_remove)
     db.commit()
-    db.refresh(project)
-    return project
+    db.refresh(project, ["members"])
+
+    return project.members

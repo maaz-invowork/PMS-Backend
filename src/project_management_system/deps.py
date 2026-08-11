@@ -61,3 +61,16 @@ def require_permission(permission_name: str) -> Callable:
         return current_user
 
     return permission_checker
+
+def check_access(project: Project, current_user: User, mesg: str = "You do not have access to this project."):
+    is_admin = current_user.role.name == "admin"
+    is_member_or_owner = (
+        project.owner_id == current_user.id or
+        any(m.id == current_user.id for m in project.members)
+    )
+    if not (is_admin or is_member_or_owner):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=mesg,
+        )
+

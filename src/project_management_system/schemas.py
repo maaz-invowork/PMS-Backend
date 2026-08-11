@@ -146,9 +146,8 @@ class ProjectUpdate(BaseModel):
     title: Optional[str] = Field(None, max_length=100)
     description: Optional[str] = None
 
-# Request payload for adding/removing members from a project
-class ProjectMemberUpdate(BaseModel):
-    user_id: int
+class ProjectMembersUpdate(BaseModel):
+    user_ids: List[int] = Field(..., min_length=1, description="List of user IDs to add")
 
 class ProjectResponse(ProjectBase):
     id: int
