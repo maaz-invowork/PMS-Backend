@@ -10,7 +10,7 @@ import schemas
 
 router = APIRouter(prefix="/projects", tags=["Projects"])
 
-@router.post("/", status_code=status.HTTP_201_CREATED, response_model=schemas.ProjectResponse)
+@router.post("/", status_code=status.HTTP_201_CREATED, response_model=schemas.ProjectDetailResponse)
 async def create_project(
     project_data: schemas.ProjectCreate,
     db: db_dependency,
@@ -24,20 +24,11 @@ async def create_project(
 
     db.add(new_project)
     db.commit()
+    db.refresh(new_project)
 
-    # Re-query with eager loading to populate relationship models for ProjectResponse
-    stmt = (
-        select(Project)
-        .options(
-            selectinload(Project.owner),
-            selectinload(Project.members),
-            selectinload(Project.boards),
-        )
-        .where(Project.id == new_project.id)
-    )
-    return db.scalar(stmt)
+    return new_project
 
-@router.get("/", response_model=List[schemas.ProjectResponse])
+@router.get("/", response_model=List[schemas.ProjectListResponse])
 async def list_user_projects(
     db: db_dependency,
     current_user: User = Depends(require_permission("project:read"))
@@ -61,7 +52,7 @@ async def list_user_projects(
 
     return db.scalars(stmt.distinct()).all()
 
-@router.get("/{project_id}", response_model=schemas.ProjectResponse)
+@router.get("/{project_id}", response_model=schemas.ProjectDetailResponse)
 async def get_project(
     project_id: int,
     db: db_dependency,
@@ -99,7 +90,7 @@ async def get_project(
 
     return project
 
-@router.patch("/{project_id}", response_model=schemas.ProjectResponse)
+@router.patch("/{project_id}", response_model=schemas.ProjectDetailResponse)
 async def update_project(
     project_id: int,
     project_update: schemas.ProjectUpdate,
@@ -194,6 +185,9 @@ async def add_project_members(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only admin / project owners can add members.",
         )
+
+    users_stmt = select(User).where(User.id.in_(member_data.user_ids))
+    requested_users = list(db.scalars(users_stmt).all())
 
     existing_ids = {m.id for m in project.members}
     new_users = [u for u in requested_users if u.id not in existing_ids]

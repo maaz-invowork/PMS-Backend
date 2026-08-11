@@ -1,5 +1,5 @@
 import enum
-from sqlalchemy import Column, Integer, ForeignKey, String, Text, Table
+from sqlalchemy import Column, Integer, ForeignKey, String, Text, Table, DateTime
 from datetime import datetime, timezone
 from typing import List, Optional
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -172,9 +172,9 @@ class Task(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     title: Mapped[str] = mapped_column(String(100))
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    position: Mapped[int] = mapped_column(
-        default=0
-    )
+    priority: Mapped[Optional[str]] = mapped_column(String(20), default="medium", nullable=True)
+    due_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    position: Mapped[int] = mapped_column(default=0)
     column_id: Mapped[int] = mapped_column(
         ForeignKey("board_columns.id", ondelete="CASCADE")
     )

@@ -51,7 +51,7 @@ async def create_task(
     check_access(project, current_user)
 
     # Validate assignee belongs to the project
-    if task_data.assigned_to_id:
+    if task_data.assignee_id:
         verify_assignee(task_data.assignee_id, project)
 
     new_task = Task(
@@ -66,8 +66,8 @@ async def create_task(
     db.add(new_task)
     db.commit()
 
-    db.refresh(task, ['assignee', 'creator'])
-    return task
+    db.refresh(new_task, ['assignee', 'creator'])
+    return new_task
 
 @router.get("/column/{column_id}", response_model=List[schemas.TaskResponse])
 async def list_column_tasks(
@@ -165,7 +165,7 @@ async def update_task(
     update_data = task_update.model_dump(exclude_unset=True)
 
     if "assignee_id" in update_data and update_data["assignee_id"] is not None:
-        verify_assignee_in_project(update_data["assignee_id"], project)
+        verify_assignee(update_data["assignee_id"], project)
 
     for field, value in update_data.items():
         setattr(task, field, value)

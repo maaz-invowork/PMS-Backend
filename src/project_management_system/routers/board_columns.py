@@ -17,9 +17,9 @@ async def create_board_column(
     current_user: User = Depends(require_permission("column:manage")),
 ):
     stmt = (
-        select(Board)
-        .options(selectinload(Board.project).selectinload(Project.members))
-        .where(Board.id == column_data.board_id)
+    select(Board)
+    .options(selectinload(Board.project))
+    .where(Board.id == column_data.board_id)
     )
     board = db.scalar(stmt)
 

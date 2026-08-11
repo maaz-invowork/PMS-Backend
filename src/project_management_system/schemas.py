@@ -69,6 +69,8 @@ class TokenData(BaseModel):
 class TaskBase(BaseModel):
     title: str = Field(..., max_length=100)
     description: Optional[str] = None
+    priority: Optional[str] = Field("medium", description="e.g. low, medium, high, urgent")
+    due_date: Optional[datetime] = None
     position: int = Field(default=0, description="Order position in column")
 
 
@@ -80,6 +82,8 @@ class TaskCreate(TaskBase):
 class TaskUpdate(BaseModel):
     title: Optional[str] = Field(None, max_length=100)
     description: Optional[str] = None
+    priority: Optional[str] = None
+    due_date: Optional[datetime] = None
     position: Optional[int] = None
     column_id: Optional[int] = None
     assignee_id: Optional[int] = None
@@ -149,7 +153,13 @@ class ProjectUpdate(BaseModel):
 class ProjectMembersUpdate(BaseModel):
     user_ids: List[int] = Field(..., min_length=1, description="List of user IDs to add")
 
-class ProjectResponse(ProjectBase):
+class ProjectListResponse(ProjectBase):
+    id: int
+    owner: UserMinimalResponse
+
+    model_config = ConfigDict(from_attributes=True)
+
+class ProjectDetailResponse(ProjectBase):
     id: int
     owner: UserMinimalResponse
     members: List[UserMinimalResponse] = []
