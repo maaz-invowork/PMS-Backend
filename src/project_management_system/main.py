@@ -1,5 +1,6 @@
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi import FastAPI, status
+from fastapi.middleware.cors import CORSMiddleware
 from typing import Annotated
 from routers import auth, projects, boards, board_columns, tasks
 from deps import get_current_user
@@ -11,6 +12,14 @@ app = FastAPI(
     description="A simple project management system built with FastAPI and uvicorn using uv package manager.", 
     version="1.0.0",
     )
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.include_router(auth.router)
 app.include_router(projects.router)

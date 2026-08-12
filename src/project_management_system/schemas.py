@@ -156,6 +156,7 @@ class ProjectMembersUpdate(BaseModel):
 class ProjectListResponse(ProjectBase):
     id: int
     owner: UserMinimalResponse
+    members: List[UserMinimalResponse] = []
 
     model_config = ConfigDict(from_attributes=True)
 

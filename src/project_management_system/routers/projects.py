@@ -5,10 +5,19 @@ from sqlalchemy.orm import selectinload
 from deps import require_permission
 
 from deps import db_dependency, user_dependency
-from models import Project, User
+from models import Project, User, Role
 import schemas
 
 router = APIRouter(prefix="/projects", tags=["Projects"])
+
+@router.get("/members", response_model=List[schemas.UserMinimalResponse])
+async def get_assignable_members(
+    db: db_dependency,
+    current_user: User = Depends(require_permission("members:manage"))
+):
+    stmt = select(User).join(User.role).where(Role.name == "member")
+    users = db.scalars(stmt).all()
+    return users
 
 @router.post("/", status_code=status.HTTP_201_CREATED, response_model=schemas.ProjectDetailResponse)
 async def create_project(
@@ -38,7 +47,6 @@ async def list_user_projects(
         .options(
             selectinload(Project.owner),
             selectinload(Project.members),
-            selectinload(Project.boards),
         )
     )
 
@@ -235,3 +243,4 @@ async def remove_project_members(
     db.refresh(project, ["members"])
 
     return project.members
+
