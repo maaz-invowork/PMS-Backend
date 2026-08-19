@@ -2,6 +2,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
+from project_management_system.redis_client import invalidate_board_cache
 
 from project_management_system.deps import require_permission, db_dependency, check_access
 from project_management_system.models import Task, BoardColumn, Board, Project, User
@@ -65,8 +66,10 @@ async def create_task(
     )
     db.add(new_task)
     db.commit()
-
     db.refresh(new_task, ['assignee', 'creator'])
+
+    await invalidate_board_cache(column.board_id)
+    
     return new_task
 
 @router.get("/column/{column_id}", response_model=List[schemas.TaskResponse])
@@ -172,6 +175,9 @@ async def update_task(
 
     db.commit()
     db.refresh(task, ['assignee', 'creator'])
+    
+    await invalidate_board_cache(task.column.board_id)
+    
     return task
 
 @router.patch("/{task_id}/status", response_model=schemas.TaskResponse)
@@ -217,6 +223,9 @@ async def update_task_status(
     task.position = move_data.position
     db.commit()
     db.refresh(task, ["assignee", "creator"])
+
+    await invalidate_board_cache(task.column.board_id)
+
     return task
 
 @router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -247,4 +256,7 @@ async def delete_task(
 
     db.delete(task)
     db.commit()
+
+    await invalidate_board_cache(task.column.board_id)
+    
     return None

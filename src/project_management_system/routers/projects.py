@@ -3,6 +3,7 @@ from fastapi import APIRouter, HTTPException, status, Depends
 from sqlalchemy import select, or_
 from sqlalchemy.orm import selectinload
 from project_management_system.deps import require_permission, db_dependency, user_dependency
+from project_management_system.redis_client import invalidate_board_cache
 
 from project_management_system.models import Project, User, Role
 import project_management_system.schemas as schemas
@@ -159,8 +160,15 @@ async def delete_project(
             detail="Only admin and project owner can delete project.",
         )
 
+    board_stmt = select(Board.id).where(Board.project_id == project_id)
+    board_ids = db.scalars(board_stmt).all()
+
     db.delete(project)
     db.commit()
+
+    for board_id in board_ids:
+        await invalidate_board_cache(board_id)
+
     return None
 
 @router.post("/{project_id}/members", response_model=List[schemas.UserMinimalResponse])

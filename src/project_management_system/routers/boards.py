@@ -5,6 +5,8 @@ from sqlalchemy.orm import selectinload
 from project_management_system.deps import require_permission, db_dependency, check_access
 from project_management_system.models import Board, Project, User
 import project_management_system.schemas as schemas
+from project_management_system.redis_client import invalidate_board_cache
+
 
 router = APIRouter(prefix="/boards", tags=["Boards"])
 
@@ -123,6 +125,8 @@ async def update_board(
 
     db.commit()
     db.refresh(board)
+
+    await invalidate_board_cache(board.id)
     return board
 
 
@@ -156,4 +160,6 @@ async def delete_board(
 
     db.delete(board)
     db.commit()
+
+    await invalidate_board_cache(board.id)
     return None

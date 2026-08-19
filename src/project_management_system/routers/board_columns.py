@@ -1,7 +1,9 @@
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+import json
+from fastapi import APIRouter, Depends, HTTPException, status, Response
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
+from project_management_system.redis_client import invalidate_board_cache, redis_client
 
 from project_management_system.deps import require_permission, db_dependency, check_access
 from project_management_system.models import BoardColumn, Board, Project, User
@@ -80,14 +82,30 @@ async def list_board_columns(
 
     check_access(board.project, current_user)
 
-    # Fetch columns ordered by position, eager-loading nested tasks
+    print("Serving from DB and setting cache...")
+
+    cache_key = f"board:{board_id}:columns"
+
+    cached_data = await redis_client.get(cache_key)
+    if cached_data:
+        # Return raw JSON string directly (bypasses Pydantic validation overhead)
+        return Response(content=cached_data, media_type="application/json")
+
     cols_stmt = (
         select(BoardColumn)
         .options(selectinload(BoardColumn.tasks))
         .where(BoardColumn.board_id == board_id)
         .order_by(BoardColumn.position.asc())
     )
-    return db.scalars(cols_stmt).all()
+
+    columns = db.scalars(cols_stmt).all()
+
+    pydantic_data = [schemas.BoardColumnResponse.model_validate(col).model_dump(mode="json") for col in columns]
+    json_str = json.dumps(pydantic_data)
+
+    await redis_client.set(cache_key, json_str, ex=600)
+
+    return Response(content=json_str, media_type="application/json")
 
 
 @router.get("/{column_id}", response_model=schemas.BoardColumnResponse)
@@ -157,6 +175,7 @@ async def update_board_column(
 
     db.commit()
     db.refresh(column)
+    await invalidate_board_cache(column.board_id)
     return column
 
 @router.delete("/{column_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -193,4 +212,6 @@ async def delete_board_column(
 
     db.delete(column)
     db.commit()
+
+    await invalidate_board_cache(column.board_id)
     return None
