@@ -3,9 +3,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 
-from deps import require_permission, db_dependency, check_access
-from models import BoardColumn, Board, Project, User
-import schemas
+from project_management_system.deps import require_permission, db_dependency, check_access
+from project_management_system.models import BoardColumn, Board, Project, User
+import project_management_system.schemas as schemas
 
 router = APIRouter(prefix="/board-columns", tags=["Board Columns"])
 

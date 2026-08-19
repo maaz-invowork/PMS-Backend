@@ -2,11 +2,10 @@ from typing import List
 from fastapi import APIRouter, HTTPException, status, Depends
 from sqlalchemy import select, or_
 from sqlalchemy.orm import selectinload
-from deps import require_permission
+from project_management_system.deps import require_permission, db_dependency, user_dependency
 
-from deps import db_dependency, user_dependency
-from models import Project, User, Role
-import schemas
+from project_management_system.models import Project, User, Role
+import project_management_system.schemas as schemas
 
 router = APIRouter(prefix="/projects", tags=["Projects"])
 
@@ -60,7 +59,7 @@ async def list_user_projects(
 
     return db.scalars(stmt.distinct()).all()
 
-@router.get("/{project_id}", response_model=schemas.ProjectDetailResponse)
+@router.get("/{project_id}", response_model=schemas.ProjectListResponse)
 async def get_project(
     project_id: int,
     db: db_dependency,
@@ -71,7 +70,6 @@ async def get_project(
         .options(
             selectinload(Project.owner),
             selectinload(Project.members),
-            selectinload(Project.boards),
         )
         .where(Project.id == project_id)
     )
@@ -98,7 +96,7 @@ async def get_project(
 
     return project
 
-@router.patch("/{project_id}", response_model=schemas.ProjectDetailResponse)
+@router.patch("/{project_id}", response_model=schemas.ProjectListResponse)
 async def update_project(
     project_id: int,
     project_update: schemas.ProjectUpdate,
@@ -110,7 +108,6 @@ async def update_project(
         .options(
             selectinload(Project.owner),
             selectinload(Project.members),
-            selectinload(Project.boards),
         )
         .where(Project.id == project_id)
     )

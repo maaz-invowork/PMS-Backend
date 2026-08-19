@@ -1,4 +1,3 @@
-import os
 from datetime import datetime, timedelta, timezone
 from typing import Annotated
 import bcrypt
@@ -7,14 +6,13 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 from sqlalchemy import select
-from dotenv import load_dotenv
-import schemas
-from deps import db_dependency, user_dependency
-from models import User, Role
+import project_management_system.schemas as schemas
+from project_management_system.deps import db_dependency, user_dependency
+from project_management_system.models import User, Role
+from project_management_system.config import settings
 
-load_dotenv()
-SECRET_KEY = os.getenv("SECRET_KEY")
-ALGORITHM = os.getenv("ALGORITHM")
+SECRET_KEY = settings.SECRET_KEY
+ALGORITHM = settings.ALGORITHM
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 oauth2_bearer = OAuth2PasswordBearer(tokenUrl="auth/token")
@@ -94,7 +92,7 @@ async def login_for_access_token(
             detail="Couldn't validate user.",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    token = create_access_token(user.username, user.id, timedelta(minutes=20))
+    token = create_access_token(user.username, user.id, timedelta(minutes=30))
     return {"access_token": token, "token_type": "bearer"}
 
 @router.get("/user", status_code=status.HTTP_200_OK, response_model=schemas.UserResponse)

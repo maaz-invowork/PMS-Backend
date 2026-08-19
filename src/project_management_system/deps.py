@@ -1,17 +1,15 @@
-import os
 from typing import Annotated, Callable
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
-from database import  SessionLocal, get_db
-from models import User, Role
-from dotenv import load_dotenv
+from project_management_system.config import settings
+from project_management_system.database import  SessionLocal, get_db
+from project_management_system.models import User, Role
 
-load_dotenv()
-SECRET_KEY = os.getenv("SECRET_KEY")
-ALGORITHM = os.getenv("ALGORITHM")
+SECRET_KEY = settings.SECRET_KEY
+ALGORITHM = settings.ALGORITHM
 
 oauth2_bearer = OAuth2PasswordBearer(tokenUrl="auth/token")
 

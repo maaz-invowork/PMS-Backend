@@ -2,9 +2,9 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
-from deps import require_permission, db_dependency, check_access
-from models import Board, Project, User
-import schemas
+from project_management_system.deps import require_permission, db_dependency, check_access
+from project_management_system.models import Board, Project, User
+import project_management_system.schemas as schemas
 
 router = APIRouter(prefix="/boards", tags=["Boards"])
 
@@ -43,7 +43,7 @@ async def create_board(
     return new_board
 
 
-@router.get("/project/{project_id}", response_model=List[schemas.BoardResponse])
+@router.get("/project/{project_id}", response_model=List[schemas.BoardListResponse])
 async def list_project_boards(
     project_id: int,
     db: db_dependency,

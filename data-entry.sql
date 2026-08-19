@@ -1,3 +1,12 @@
+INSERT INTO roles (name, description)
+VALUES 
+    ('admin', 'System Administrator with full permissions'),
+    ('manager', 'Project manager with elevated permissions'),
+    ('member', 'Standard user with standard permissions')
+ON CONFLICT (name) DO NOTHING;
+
+
+
 INSERT INTO permissions (name, description) VALUES
 ('project:create', 'Create new projects'),
 ('project:read', 'View projects'),

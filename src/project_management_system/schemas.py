@@ -131,6 +131,12 @@ class BoardCreate(BoardBase):
 class BoardUpdate(BaseModel):
     name: Optional[str] = Field(None, max_length=100)
 
+class BoardListResponse(BoardBase):
+    id: int
+    project_id: int
+
+    model_config = ConfigDict(from_attributes=True)
+    
 class BoardResponse(BoardBase):
     id: int
     project_id: int
